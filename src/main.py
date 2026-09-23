@@ -1,34 +1,23 @@
-print("Trac3r starting...")
+from traceroute import run_traceroute
+from enrichment import enrich_hop
 
-import subprocess #gives Python access to the command line
-import ipaddress #gives Python access to IP address validation
+print("\nTrac3r starting...\n")
+
+# --------------------- #User Input and Error Handling# ---------------------------------- #
 
 target = input("Enter a website or IP address to trace: ")
 
-process = subprocess.Popen(
-    ["traceroute", target], 
-    stdout = subprocess.PIPE, stderr = subprocess.PIPE, 
-    text=True)
+hops = run_traceroute(target)
 
-for line in process.stdout:
-    hops =[]
-    parts = line.split()
+for hop in hops:
+    enrich_hop(hop)
 
-    if parts and parts[0].isdigit():
-        hop_number = parts[0]
-        hop_IP = None
-
-        for part in parts[1:]:
-            candidate = part.strip("()")
-
-            try:
-                ipaddress.ip_address(candidate)
-                hop_IP = candidate
-                break
-            except ValueError:
-                continue
-            
-        print(f"Hop {hop_number}: {hop_IP if hop_IP else 'No IP found'}")
-
-
-
+for hop in hops:
+    print(f"Hop {hop['number']}:",
+          f"IP = {hop['IP'] if hop['IP'] else 'No IP found'} |",
+          f"Hostname: {hop["hostname"]} |",
+          f"Avg Latency {hop["AvgLatency"]} ms|" if hop["AvgLatency"] is not None else "N/A |",
+          f"ASN: {hop["asn"]} |", f"Organization: {hop["organization"]}", 
+          f"city: {hop["city"]} |", f"Region: {hop["region"]} |", f"Country: {hop["country"]}")
+      
+# -------------------- # Test Environment# ---------------------------------- #

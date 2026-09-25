@@ -1,5 +1,5 @@
 import folium #a Python library for making interactive maps in HTML
-
+import subprocess #is a Python module that lets Python start and interact with external programs/commands on your computer
 # ------------------# Creating the Map # ------------------ #
 
 def create_map(hops):
@@ -14,12 +14,21 @@ def create_map(hops):
         print("No mappable hops found")
         return
 
-    first_hop = mappable_hops[0]
-
+    first_hop = mappable_hops[0] #is only being used to decide where the map initially centers when it opens.
+    
     route_map = folium.Map(              #creates the map object
         location=[first_hop["latitude"],first_hop["longitude"]],
-        zoom_start=4
-    )
+        zoom_start=4,
+        tiles="OpenTopoMap")
+
+    route_coordinates = []
+
+    for hop in mappable_hops:
+        route_coordinates.append([hop["latitude"],hop["longitude"]])
+
+    route_map.fit_bounds(route_coordinates) #zoom and position the map so all these coordinates are visible.
+
+    folium.PolyLine(route_coordinates, weight=3).add_to(route_map)
 
     for hop in mappable_hops:
         folium.Marker(
@@ -34,7 +43,26 @@ def create_map(hops):
                 f"Region: {hop['region']}<br>"
                 f"Country: {hop['country']}<br>"
                 f"Avg Latency: {hop['AvgLatency']} ms"
+            ),
+            icon=folium.DivIcon(    #lets you use custom HTML instead of Folium’s default pin icon. 
+                html=f"""<div style="
+                    background-color: white; 
+                    border: 2px solid black;
+                    border-radius: 50%;
+                    width: 28px;
+                    height: 28px;
+                    text-align: center;
+                    line-height: 24px;
+                    font-weight: bold;
+                ">
+                    {hop["number"]}
+                </div>
+                """
             )
         ).add_to(route_map)
 
     route_map.save("Trac3r_Map.html")
+
+    subprocess.run([
+        "open", "-a", "Google Chrome", "Trac3r_Map.html"
+    ])

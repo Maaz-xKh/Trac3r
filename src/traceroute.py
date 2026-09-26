@@ -1,120 +1,98 @@
-import subprocess   #gives Python access to the command line
-import ipaddress    #gives Python access to IP address validation
-import time         #lets us measure elapsed time
-import select       #lets Python wait for output from traceroute without blocking forever
+# --------------------- # Imports # ---------------------------------- #
 
-def run_traceroute(target):
+import ipaddress
+import os
+import select
+import subprocess
+import time
 
-# --------------------- # POPEN # --------------------------------------------------- #
-# Popen launches the system traceroute command as a separate process and lets Python read its command-line output while it is still running
+
+# --------------------- # Hop Parsing - IP Address and Latency # ---------------------------------- #
+
+def parse_hop(line):
+    parts = line.split()
+    if not parts or not parts[0].isdigit():
+        return None
+    address = None
+    hostname = None
+    latencies = []
+    #--------# IP Address and Hostname Extraction #------#
+    for part in parts[1:]:
+        try:
+            address = str(ipaddress.ip_address(part.strip("()")))
+            break
+        except ValueError:
+            continue
+    if len(parts) > 2 and parts[1] != "*" and not parts[1].startswith("("):
+        try:
+            ipaddress.ip_address(parts[1])
+        except ValueError:
+            hostname = parts[1]
+    #--------# Average Latency Calculation #------#
+    for index, part in enumerate(parts[:-1]):
+        if parts[index + 1] == "ms":
+            try:
+                latencies.append(float(part))
+            except ValueError:
+                pass
+    return {"number": int(parts[0]), "IP": address, "hostname": hostname,
+            "AvgLatency": round(sum(latencies) / len(latencies), 2) if latencies else None}
+
+
+# --------------------- # Traceroute Process and Safeguards # ---------------------------------- #
+
+def run_traceroute(target, outcome=None):
+    # outcome stores the reason the trace ended while yield sends each hop to the caller.
+    if outcome is None:
+        outcome = {}
+    outcome.update(status="incomplete", message="Probing ended without confirming arrival at the destination.")
     process = subprocess.Popen(
-        ["traceroute", "-m", "20", "-w", "2",target], 
-        stdout = subprocess.PIPE, stderr = subprocess.PIPE, 
-        text=True)
-
-# --------------------- # Hops List & Variable Initialization # ------------------- #
-# --------------------- # Safeguarding # ------------------------------------------ #
-# Hops list is populated with parsed data from the live traceroute command output (subprocess.Popen) to build the route database
-    hops =[]    
-
+        ["traceroute", "-n", "-m", "20", "-w", "2", target],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    #--------# Timeout and Missing-Hop Safeguards #------#
+    deadline = time.monotonic() + 30
     consecutive_no_response = 0
-
-# Trace safeguards:
-# -m 20 in Popen limits traceroute to a maximum of 20 hops.
-# 4 consecutive missing hops stops the trace if the route becomes persistently unresponsive.
-# A 30-second global timeout provides a final safety limit if traceroute itself gets stuck.
-
-    trace_timeout = 30
-    start_time = time.monotonic()
-
-    while True:
-        elapsed_time = time.monotonic() - start_time
-        remaining_time = trace_timeout - elapsed_time
-
-        if remaining_time <=0:
-            print("\nTrace stopped after exceeding the 30-second time limit.")
-            print(
-                "The destination may still be reachable, but some routers may be "
-                "filtering, rate-limiting, or ignoring traceroute probes.")
-            process.terminate()
-            break
-
-        ready, _, _ = select.select([process.stdout], [], [],remaining_time)
-
-        if not ready:
-            print("\nTrace stopped after exceeding the 30-second time limit.")
-            print(
-                "The destination may still be reachable, but some routers may be "
-                "filtering, rate-limiting, or ignoring traceroute probes.")
-            process.terminate()
-            break
-
-        line = process.stdout.readline()
-
-        if line == "" and process.poll() is not None: #checks whether the external traceroute process has finished
-            break
-
-        parts = line.split()
-
-        if parts and parts[0].isdigit():
-            hop_number = int(parts[0])
-            hop_IP = None
-            hop_hostname = None
-            hop_latencies = []
-
-
-# -------------------- # IP Address Extraction # --------------------- #
-            if len(parts) > 2 and not parts[1].startswith("(") and not parts[1] == "*":
-                try:
-                    ipaddress.ip_address(parts[1].strip("()"))
-                except ValueError:
-                    hop_hostname = parts[1]
-
-# -------------------- # IP Address Extraction # --------------------- #
-            for part in parts[1:]:
-                candidate = part.strip("()")
-
-                try:
-                    ipaddress.ip_address(candidate)
-                    hop_IP = candidate
-                    break
-                except ValueError:
+    pending = b""
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
+                outcome.update(status="timeout", message="Trace timed out after 30 seconds. Partial hops are preserved.")
+                return
+            # Read only available bytes: readline() can block on a partial hop line.
+            chunk = os.read(process.stdout.fileno(), 65536)
+            if not chunk:
+                if process.wait(timeout=1) != 0:
+                    outcome.update(status="error", message="Traceroute failed. Check the destination and network permissions.")
+                return
+            pending += chunk
+            while b"\n" in pending:
+                if time.monotonic() >= deadline:
+                    outcome.update(status="timeout", message="Trace timed out after 30 seconds. Partial hops are preserved.")
+                    return
+                raw, pending = pending.split(b"\n", 1)
+                hop = parse_hop(raw.decode("utf-8", errors="replace"))
+                if hop is None:
                     continue
-
-        if hop_IP is None:
-            consecutive_no_response += 1
-        else:
-            consecutive_no_response = 0
-# -------------------- # Latency Extraction # --------------------- #
-            for i in range(len(parts)-1):
-                if parts[i + 1] == "ms":
-                    try:
-                        hop_latencies.append(float(parts[i]))
-                    except ValueError:
-                        continue
-
-            if hop_latencies:
-                average_latency = round((sum(hop_latencies)/len(hop_latencies)),2)
-            else:
-                average_latency = None
-
-            hop = {"number": hop_number, "IP": hop_IP, "hostname": hop_hostname, "AvgLatency": average_latency}
-
-            hops.append(hop)
-            print(f"Hop {hop_number}: {hop_IP if hop_IP else 'No IP found'}")
-
-            if consecutive_no_response >= 4:
-                print("\nTrace stopped after 4 consecutive unresponsive hops")
-                print("The route may continue but the intermediate routers may be "
-                      "filtering, rate-limiting, or ignoring traceroute probes.")
-                process.terminate()
-                break
-    return hops
-
-# -------------------- # Test Environment# ---------------------------------- #
-
-# if __name__ == "__main__":
-#     test_hops = run_traceroute("google.com")
-
-#     for hop in test_hops:
-#         print(hop)
+                consecutive_no_response = consecutive_no_response + 1 if hop["IP"] is None else 0
+                #--------# Trace Completion Status #------#
+                if hop["IP"] == target:
+                    outcome.update(status="success", message="Destination reached successfully.")
+                elif consecutive_no_response >= 4:
+                    outcome.update(status="unresponsive", message="Stopped after 4 consecutive unresponsive hops. The destination may still be reachable.")
+                elif hop["number"] >= 20:
+                    outcome.update(status="hop_limit", message="Stopped at the 20-hop limit without reaching the destination.")
+                yield hop
+                if outcome["status"] != "incomplete":
+                    return
+    #--------# Process Cleanup #------#
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        process.stdout.close()

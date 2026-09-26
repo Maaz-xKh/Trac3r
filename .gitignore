@@ -217,3 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+
+# --------------------- # Local Tests and Generated Results # ---------------------------------- #
+/tests/
+/scripts/trace_matrix.py
+/Trace_Test_Results.md
+/trace-matrix-results.json
+/Trac3r_Map.html

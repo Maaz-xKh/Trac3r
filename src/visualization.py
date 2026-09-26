@@ -2,7 +2,7 @@ import folium #a Python library for making interactive maps in HTML
 import subprocess #is a Python module that lets Python start and interact with external programs/commands on your computer
 # ------------------# Creating the Map # ------------------ #
 
-def create_map(hops):
+def create_map(hops, open_browser=False):
     
     mappable_hops = [] #builds a second list containing only hops we can actually place on a map.
 
@@ -63,6 +63,7 @@ def create_map(hops):
 
     route_map.save("Trac3r_Map.html")
 
-    subprocess.run([
-        "open", "-a", "Google Chrome", "Trac3r_Map.html"
-    ])
+    if open_browser:
+        subprocess.run([
+            "open", "-a", "Google Chrome", "Trac3r_Map.html"
+        ])

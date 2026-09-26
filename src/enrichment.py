@@ -27,8 +27,8 @@ def enrich_hop(hop):
 
         else:
             try:
-                lookup = IPWhois(hop_IP)
-                data = lookup.lookup_rdap()
+                lookup = IPWhois(hop_IP, timeout=2)
+                data = lookup.lookup_rdap(depth=0, retry_count=0)
 
                 hop_ASN = data["asn"]
                 hop_organization = data["asn_description"]
@@ -38,9 +38,9 @@ def enrich_hop(hop):
                 hop_organization = None
 
 # -------------------- # Geolocation data # --------------------- #
-    if hop_IP:
+    if hop_IP and ipaddress.ip_address(hop_IP).is_global:
         try:
-            response = requests.get(f"https://ipwho.is/{hop_IP}")
+            response = requests.get(f"https://ipwho.is/{hop_IP}", timeout=(2, 2))
             location_data = response.json()
 
             if location_data["success"]:

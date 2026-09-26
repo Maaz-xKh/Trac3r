@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trac3r · Live network routes</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- --------------------- # Map # ---------------------------------- -->
+    <div id="map" aria-label="Network route map"></div>
+    <!-- --------------------- # Sidebar and Destination Input # ---------------------------------- -->
+    <aside class="sidebar" aria-label="Route explorer">
+        <header class="top-bar">
+            <div class="brand"><span class="logo">Trac3r<span>.</span></span><span class="tagline">LIVE NETWORK ATLAS</span></div>
+            <h1 class="atlas-title">Follow the internet.</h1>
+            <p class="atlas-intro">Discover the routers and networks between you and any destination.</p>
+            <form id="trace-form" class="trace-controls">
+                <label class="sr-only" for="target-input">Website or IPv4 address</label>
+                <input id="target-input" type="text" placeholder="Website or IPv4 address" required maxlength="2048" autocomplete="off" spellcheck="false" aria-describedby="trace-status">
+                <button id="trace-button" type="submit">Trace route <span aria-hidden="true">↗</span></button>
+            </form>
+        </header>
+        <!-- --------------------- # Live Hop List and Selected Hop Details # ---------------------------------- -->
+        <section class="hop-panel" aria-label="Live route hops">
+            <div class="panel-heading"><h2>Network hops</h2><span id="trace-state" class="state">Ready</span></div>
+            <p id="trace-status" role="status" aria-live="polite">Enter a destination to discover its network path.</p>
+            <p id="playback-status" role="status" class="playback-status" hidden>Drawing route…</p>
+            <div class="route-summary"><span id="hop-count">0 hops · 0 mapped</span><button id="fit-route" type="button" disabled>Fit route</button></div>
+            <p id="empty-state">Each router appears here as it responds, including hops without a map location.</p>
+            <section id="hop-inspector" class="hop-inspector" aria-label="Selected hop details" hidden>
+                <button id="close-hop-inspector" type="button" aria-label="Close hop details">×</button>
+                <div id="hop-inspector-content"></div>
+            </section>
+            <ol id="hop-list" aria-label="Discovered hops"></ol>
+            <div class="map-note"><span class="line-key"></span> Hop segments <span class="line-key gap"></span> Unmapped gap<br>Locations are approximate. Lines show hop order, not physical cables. Nearby nodes are spread for readability. Line animation is illustrative, not packet speed.</div>
+        </section>
+        <footer class="sidebar-footer">Trac3r / Network exploration</footer>
+    </aside>
+    <!-- --------------------- # Leaflet and Frontend JavaScript # ---------------------------------- -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

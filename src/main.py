@@ -27,14 +27,22 @@ while True:
     except socket.gaierror:
         print("Invalid website or IP Address. Please try again.\n")
 
-hops = run_traceroute(target)
+hops = []
+map_opened = False
 
-# --------------------- #Hop Enrichment# ---------------------------------- #
+# --------------------- # Live Hop Processing # ---------------------------------- #
 
-for hop in hops:
+
+for hop in run_traceroute(target):
     enrich_hop(hop)
+    hops.append(hop)
 
-create_map(hops)
+    if hop["latitude"] is not None and hop["longitude"] is not None:
+        if not map_opened:
+            create_map(hops, open_browser=True)
+            map_opened = True
+        else:
+            create_map(hops)
 
 for hop in hops:
     print(f"Hop {hop['number']}:",
